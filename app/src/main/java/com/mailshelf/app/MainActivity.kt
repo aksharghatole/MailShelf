@@ -136,8 +136,7 @@ private fun Shelf(vault: Vault) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
             val filtered = remember(messages, selected, query) {
-                messages.filter { m -> (selected == null || m.email == selected) &&
-                    (m.sender.contains(query, true) || m.subject.contains(query, true) || m.email.contains(query, true)) }
+                InboxLogic.filter(messages, selected, query)
             }
             LazyColumn(Modifier.weight(1f)) {
                 if (filtered.isEmpty()) item { Text("No recent messages to display.", modifier = Modifier.padding(16.dp)) }

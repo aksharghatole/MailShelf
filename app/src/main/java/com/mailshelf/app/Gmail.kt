@@ -34,7 +34,8 @@ object Gmail {
     fun recent(email: String, password: String): List<MailItem> = inbox(email, password) { f ->
         val count = f.messageCount
         if (count == 0) emptyList() else {
-            val msgs = f.getMessages(maxOf(1, count - 19), count)
+            val range = InboxLogic.recentRange(count)
+            val msgs = f.getMessages(range.first, range.last)
             val profile = FetchProfile().apply {
                 add(FetchProfile.Item.ENVELOPE)
                 add(FetchProfile.Item.FLAGS)
