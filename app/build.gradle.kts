@@ -19,7 +19,15 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
-    packaging { resources.excludes += setOf("META-INF/LICENSE", "META-INF/NOTICE", "META-INF/LICENSE.txt", "META-INF/NOTICE.txt", "META-INF/DEPENDENCIES") }
+    packaging {
+        // Keep third-party license and notice text while resolving duplicate resources.
+        resources.merges += setOf(
+            "META-INF/LICENSE", "META-INF/NOTICE",
+            "META-INF/LICENSE.txt", "META-INF/NOTICE.txt",
+            "META-INF/LICENSE.md", "META-INF/NOTICE.md",
+            "META-INF/DEPENDENCIES"
+        )
+    }
 }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
