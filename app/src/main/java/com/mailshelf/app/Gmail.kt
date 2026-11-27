@@ -32,24 +32,43 @@ object Gmail {
     }
     fun verify(email: String, password: String) = inbox(email, password) { Unit }
     fun recent(email: String, password: String): List<MailItem> = inbox(email, password) { f ->
-        val count = f.messageCount
-        if (count == 0) emptyList() else {
-            val range = InboxLogic.recentRange(count)
-            val msgs = f.getMessages(range.first, range.last)
-            val profile = FetchProfile().apply {
-                add(FetchProfile.Item.ENVELOPE)
-                add(FetchProfile.Item.FLAGS)
-                add(UIDFolder.FetchProfileItem.UID)
+        fetchRange(f, email, InboxLogic.recentRange(f.messageCount))
+    }
+
+    /** Resolve a UID to its current sequence number; never persist sequence numbers. */
+    fun older(anchor: MailItem, password: String, limit: Int): List<MailItem> =
+        inbox(anchor.email, password) { f ->
+            require(limit in 1..InboxLogic.PAGE_SIZE)
+            check(f.uidValidity == anchor.validity) { "Inbox changed; refresh first." }
+            val boundary = f.getMessageByUID(anchor.uid) ?: error("Inbox changed; refresh first.")
+            val number = boundary.messageNumber
+            check(number > 0 && !boundary.isExpunged) { "Inbox changed; refresh first." }
+            val page = fetchRange(f, anchor.email, InboxLogic.recentRange(number - 1, limit))
+            check(!boundary.isExpunged && boundary.messageNumber == number &&
+                page.all { it.uid < anchor.uid && it.validity == anchor.validity }) {
+                "Inbox changed; refresh first."
             }
-            f.fetch(msgs, profile)
-            val validity = f.uidValidity
-            msgs.map { m ->
-                val from = m.from?.firstOrNull()
-                MailItem(email, f.getUID(m), validity,
-                    (from as? InternetAddress)?.toUnicodeString() ?: from?.toString() ?: "(Unknown sender)",
-                    m.subject ?: "(No subject)", m.receivedDate?.time ?: m.sentDate?.time ?: 0L,
-                    !m.isSet(Flags.Flag.SEEN))
-            }
+            page
+        }
+
+    private fun fetchRange(f: IMAPFolder, email: String, range: IntRange): List<MailItem> {
+        if (range.isEmpty()) return emptyList()
+        val msgs = f.getMessages(range.first, range.last)
+        val profile = FetchProfile().apply {
+            add(FetchProfile.Item.ENVELOPE)
+            add(FetchProfile.Item.FLAGS)
+            add(UIDFolder.FetchProfileItem.UID)
+        }
+        f.fetch(msgs, profile)
+        val validity = f.uidValidity
+        return msgs.map { m ->
+            val from = m.from?.firstOrNull()
+            val uid = f.getUID(m)
+            check(uid > 0 && !m.isExpunged) { "Inbox changed; refresh first." }
+            MailItem(email, uid, validity,
+                (from as? InternetAddress)?.toUnicodeString() ?: from?.toString() ?: "(Unknown sender)",
+                m.subject ?: "(No subject)", m.receivedDate?.time ?: m.sentDate?.time ?: 0L,
+                !m.isSet(Flags.Flag.SEEN))
         }
     }
     fun body(item: MailItem, password: String): String = inbox(item.email, password) { f ->
