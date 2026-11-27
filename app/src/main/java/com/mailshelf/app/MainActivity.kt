@@ -40,6 +40,7 @@ private fun Shelf(vault: Vault) {
     val scope = rememberCoroutineScope()
     var accounts by remember { mutableStateOf(emptyList<Account>()) }
     var messages by remember { mutableStateOf(emptyList<MailItem>()) }
+    var exhausted by remember { mutableStateOf(emptySet<String>()) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Loading accounts…") }
     var vaultReady by remember { mutableStateOf(false) }
@@ -66,6 +67,7 @@ private fun Shelf(vault: Vault) {
         val snapshot = accounts
         if (snapshot.isEmpty()) { status = "Add an account first."; return }
         busy = true
+        exhausted = emptySet()
         scope.launch {
             var failed = 0
             var completed = 0
@@ -88,6 +90,26 @@ private fun Shelf(vault: Vault) {
                 }
                 status = "${messages.size} recent messages · $failed account(s) failed"
             } finally { busy = false }
+        }
+    }
+    fun loadOlder(account: String) {
+        if (busy || !vaultReady || account in exhausted) return
+        val anchor = InboxLogic.oldest(messages, account) ?: return
+        val limit = InboxLogic.remainingCapacity(messages, account)
+        if (limit == 0) return
+        busy = true
+        status = "Loading older messages…"
+        scope.launch {
+            try {
+                val page = withContext(Dispatchers.IO) {
+                    Gmail.older(anchor, vault.password(account), limit)
+                }
+                messages = InboxLogic.merge(messages, page)
+                if (page.size < limit) exhausted = exhausted + account
+                status = if (page.isEmpty()) "No older inbox messages." else "Loaded ${page.size} older messages."
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { status = "Could not load older messages. Refresh if the inbox changed." }
+            finally { busy = false }
         }
     }
     fun closeMessage() {
@@ -128,10 +150,26 @@ private fun Shelf(vault: Vault) {
                 OutlinedButton(onClick = { manage = true }, enabled = vaultReady && !busy) { Text("Accounts") }
                 TextButton(onClick = { refresh() }, enabled = vaultReady && !busy) { Text("Refresh") }
             }
-            OutlinedTextField(query, { query = it }, label = { Text("Search recent sender or subject") },
+            OutlinedTextField(query, { query = it }, label = { Text("Search loaded sender or subject") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
             TextButton(onClick = { manage = true }, enabled = !busy) {
                 Text("Showing: " + (accounts.find { it.email == selected }?.label ?: "All inboxes"))
+            }
+            selected?.let { account ->
+                val loaded = messages.count { it.email == account }
+                val canLoad = loaded > 0 && account !in exhausted &&
+                    InboxLogic.remainingCapacity(messages, account) > 0
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("$loaded loaded", modifier = Modifier.align(androidx.compose.ui.Alignment.CenterVertically),
+                        style = MaterialTheme.typography.labelMedium)
+                    TextButton(onClick = { loadOlder(account) }, enabled = !busy && canLoad) {
+                        Text(when {
+                            account in exhausted -> "End of inbox"
+                            loaded >= InboxLogic.MAX_LOADED_PER_ACCOUNT -> "Session limit reached"
+                            else -> "Load older"
+                        })
+                    }
+                }
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
@@ -139,7 +177,7 @@ private fun Shelf(vault: Vault) {
                 InboxLogic.filter(messages, selected, query)
             }
             LazyColumn(Modifier.weight(1f)) {
-                if (filtered.isEmpty()) item { Text("No recent messages to display.", modifier = Modifier.padding(16.dp)) }
+                if (filtered.isEmpty()) item { Text("No loaded messages to display.", modifier = Modifier.padding(16.dp)) }
                 items(filtered, key = { it.key }) { m ->
                     ListItem(
                         headlineContent = { Text((if (m.unread) "• " else "") + m.subject, maxLines = 2) },
@@ -226,6 +264,7 @@ private fun Shelf(vault: Vault) {
                     try {
                         accounts = withContext(Dispatchers.IO) { vault.remove(a.email); vault.accounts() }
                         messages = messages.filterNot { it.email == a.email }
+                        exhausted = exhausted - a.email
                         if (selected == a.email) selected = null
                         status = "Account removed."
                         remove = null
