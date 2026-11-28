@@ -27,3 +27,10 @@ gradle :app:assembleDebug
 ## Limitations
 
 Initial implementation, not yet tested with real Gmail accounts. Recent inbox only (20 messages per account per refresh); no full-history search, OAuth, notifications, persistent cache, or biometric lock yet. Account count has no hard-coded maximum; provider quotas and device resources apply. 500 accounts / 1M accessible emails are future stress-test targets, not demonstrated capacity. No HTML rendering, no link execution, and no attachments in the first build.
+
+
+## Gmail connection troubleshooting
+
+MailShelf connects over IMAP using a Google app password, not your regular Google password. If sign-in fails, confirm IMAP access is available for the account, verify the email address and app password, and check whether an organization policy or Advanced Protection prevents app passwords. If you recently changed or revoked the app password, remove the saved account in MailShelf and add it again with the replacement.
+
+Use a trusted network and keep the app password inside the app. Do not paste it into issue reports, logs or screenshots. Connection errors can also result from temporary network or provider limits; wait and retry manually rather than repeatedly refreshing.
