@@ -44,6 +44,7 @@ private fun Shelf(vault: Vault) {
     var status by remember { mutableStateOf("Loading accounts…") }
     var vaultReady by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var unreadOnly by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<String?>(null) }
     var add by remember { mutableStateOf(false) }
     var manage by remember { mutableStateOf(false) }
@@ -130,16 +131,25 @@ private fun Shelf(vault: Vault) {
             }
             OutlinedTextField(query, { query = it }, label = { Text("Search recent sender or subject") },
                 modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Row {
+                Checkbox(checked = unreadOnly, onCheckedChange = { unreadOnly = it })
+                Text("Unread only", modifier = Modifier.clickable { unreadOnly = !unreadOnly })
+            }
             TextButton(onClick = { manage = true }, enabled = !busy) {
                 Text("Showing: " + (accounts.find { it.email == selected }?.label ?: "All inboxes"))
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Text(status, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
             val filtered = remember(messages, selected, query) {
-                InboxLogic.filter(messages, selected, query)
+                InboxLogic.filter(messages, selected, query, unreadOnly)
             }
             LazyColumn(Modifier.weight(1f)) {
-                if (filtered.isEmpty()) item { Text("No recent messages to display.", modifier = Modifier.padding(16.dp)) }
+                if (filtered.isEmpty()) item {
+                    Text(
+                        if (unreadOnly) "No unread recent messages." else "No recent messages to display.",
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
                 items(filtered, key = { it.key }) { m ->
                     ListItem(
                         headlineContent = { Text((if (m.unread) "• " else "") + m.subject, maxLines = 2) },

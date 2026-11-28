@@ -49,4 +49,12 @@ class InboxLogicTest {
         assertNotEquals(first.key, first.copy(uid = 2).key)
         assertEquals(first.key, first.copy(unread = false).key)
     }
+
+    @Test fun unreadOnlyCombinesWithAccountAndSearch() {
+        assertEquals(listOf(first), InboxLogic.filter(messages, null, "", unreadOnly = true))
+        assertEquals(listOf(first), InboxLogic.filter(messages, first.email, "verification", unreadOnly = true))
+        assertTrue(InboxLogic.filter(messages, second.email, "", unreadOnly = true).isEmpty())
+        assertTrue(InboxLogic.filter(messages, null, "invoice", unreadOnly = true).isEmpty())
+    }
+
 }

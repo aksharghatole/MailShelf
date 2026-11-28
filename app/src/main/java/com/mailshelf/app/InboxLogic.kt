@@ -2,10 +2,11 @@ package com.mailshelf.app
 
 /** Pure inbox operations: no credentials, Android APIs or network access. */
 internal object InboxLogic {
-    fun filter(messages: List<MailItem>, account: String?, query: String): List<MailItem> {
+    fun filter(messages: List<MailItem>, account: String?, query: String, unreadOnly: Boolean = false): List<MailItem> {
         val needle = query.trim()
         return messages.filter { item ->
             (account == null || item.email == account) &&
+                (!unreadOnly || item.unread) &&
                 (item.sender.contains(needle, ignoreCase = true) ||
                     item.subject.contains(needle, ignoreCase = true) ||
                     item.email.contains(needle, ignoreCase = true))
